@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Monetary Policy Rules – Interactive Line Chart</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      color-scheme: light dark;
+    }
+
+    body {
+      margin: 0;
+      padding: 1.5rem;
+      background: #f5f5f7;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.75rem 1.5rem 2rem;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 1.5rem;
+      text-align: center;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .control-group {
+      border-radius: 10px;
+      padding: 0.75rem 0.9rem;
+      background: #f7f7fb;
+      border: 1px solid #e1e1f0;
+    }
+
+    .control-group h2 {
+      font-size: 0.95rem;
+      margin: 0 0 0.4rem;
+      font-weight: 600;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      margin-bottom: 0.35rem;
+    }
+
+    select {
+      width: 100%;
+      padding: 0.35rem 0.5rem;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 0.9rem;
+      background: white;
+    }
+
+    .chart-wrapper {
+      position: relative;
+      height: 420px;
+    }
+
+    .note {
+      font-size: 0.78rem;
+      color: #666;
+      margin-top: 0.6rem;
+      text-align: right;
+    }
+
+    .error {
+      color: #b00020;
+      font-size: 0.85rem;
+      margin-top: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <h1>Monetary policy rules vs Bank rate</h1>
+
+    <section class="controls">
+      <div class="control-group">
+        <h2>Series 1</h2>
+        <label for="series1Rule">Rule</label>
+        <select id="series1Rule"></select>
+
+        <label for="series1Year">Year</label>
+        <select id="series1Year"></select>
+      </div>
+
+      <div class="control-group">
+        <h2>Series 2</h2>
+        <label for="series2Rule">Rule</label>
+        <select id="series2Rule"></select>
+
+        <label for="series2Year">Year</label>
+        <select id="series2Year"></select>
+      </div>
+    </section>
+
+    <div class="chart-wrapper">
+      <canvas id="rateChart"></canvas>
+    </div>
+
+    <p class="note">
+      Data source: Google Sheet (published as CSV). Values are percentages.
+    </p>
+    <p id="errorMessage" class="error" style="display:none"></p>
+  </main>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+  <!-- PapaParse for CSV parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <script>
+    /*****************************************************
+     * 1. CONFIG – PUT YOUR GOOGLE SHEET CSV URL HERE
+     *****************************************************/
+    // After you publish your Google Sheet as CSV (see instructions below),
+    // paste the CSV URL into the string below:
+    const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ-5NpX5GcXpP-7yzPEhUznZXLxsA6gU8llOaVQgyJ34GxrpAJCZA_gb8ZxIRIwKeBIohusq8onHn-I/pub?output=csv";
+
+    /*****************************************************
+     * 2. DATA STRUCTURES
+     *****************************************************/
+    const monthLabels = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+    // The rule/column names we expect in the sheet:
+    const RULE_COLUMNS = [
+      "Bank Rate",
+      "Taylor Rule",
+      "Balance Rule",
+      "First Difference Rule",
+      "Inertial Rule"
+    ];
+
+    // Will become: { [year]: { [ruleName]: [12 monthly values] } }
+    const dataByYear = {};
+
+    let availableYears = [];   // e.g. [2023, 2024, 2025]
+    let chartInstance = null;
+
+    const series1RuleSelect = document.getElementById("series1Rule");
+    const series1YearSelect = document.getElementById("series1Year");
+    const series2RuleSelect = document.getElementById("series2Rule");
+    const series2YearSelect = document.getElementById("series2Year");
+    const errorMessageEl = document.getElementById("errorMessage");
+
+    /*****************************************************
+     * 3. UTILITIES
+     *****************************************************/
+    function parseDateFlexible(dateStr) {
+      if (!dateStr) return null;
+
+      // already a Date object
+      if (Object.prototype.toString.call(dateStr) === "[object Date]") {
+        return isNaN(dateStr.getTime()) ? null : dateStr;
+      }
+
+      // try to handle "dd-mm-yyyy", "dd/mm/yyyy", or "yyyy-mm-dd"
+      const parts = String(dateStr).trim().split(/[-/]/);
+      if (parts.length === 3) {
+        let day, month, year;
+        if (parts[0].length === 4) {
+          // yyyy-mm-dd
+          year = +parts[0];
+          month = +parts[1];
+          day = +parts[2];
+        } else {
+          // assume dd-mm-yyyy
+          day = +parts[0];
+          month = +parts[1];
+          year = +parts[2];
+        }
+        const d = new Date(year, month - 1, day);
+        return isNaN(d.getTime()) ? null : d;
+      }
+
+      // last fallback
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    function toNumber(value) {
+      if (value == null || value === "") return null;
+      const num = parseFloat(String(value).replace("%", "").trim());
+      return isNaN(num) ? null : num;
+    }
+
+    function fillSelect(select, options, { defaultValue } = {}) {
+      select.innerHTML = "";
+      options.forEach(opt => {
+        const o = document.createElement("option");
+        o.value = opt.value;
+        o.textContent = opt.label;
+        if (defaultValue !== undefined && defaultValue === opt.value) {
+          o.selected = true;
+        }
+        select.appendChild(o);
+      });
+    }
+
+    /*****************************************************
+     * 4. LOAD & PROCESS GOOGLE SHEET DATA
+     *****************************************************/
+    function showError(message) {
+      errorMessageEl.style.display = "block";
+      errorMessageEl.textContent = message;
+    }
+
+    function loadSheetData() {
+      if (!SHEET_CSV_URL || SHEET_CSV_URL.startsWith("PASTE_")) {
+        showError(
+          "Please edit this file and set SHEET_CSV_URL to your published Google Sheet CSV link."
+        );
+        return;
+      }
+
+      Papa.parse(SHEET_CSV_URL, {
+        download: true,
+        header: true,
+        dynamicTyping: false,
+        complete: function (results) {
+          if (results.errors && results.errors.length) {
+            console.error(results.errors);
+            showError(
+              "Error parsing CSV from Google Sheets. Check the browser console for details."
+            );
+            return;
+          }
+
+          const rows = results.data.filter(row => row.Date);
+          if (!rows.length) {
+            showError("No data rows found in the CSV. Check that the sheet has a Date column.");
+            return;
+          }
+
+          processRows(rows);
+
+          if (!availableYears.length) {
+            showError("No usable data found after parsing. Verify column names and dates.");
+            return;
+          }
+
+          initUI();
+          initChart();
+          updateChart();
+        },
+        error: function (err) {
+          console.error(err);
+          showError(
+            "Error downloading CSV from Google Sheets. Check that the link is correct and published."
+          );
+        }
+      });
+    }
+
+    function processRows(rows) {
+      rows.forEach(row => {
+        const date = parseDateFlexible(row.Date);
+        if (!date) return;
+
+        const year = date.getFullYear();
+        const monthIndex = date.getMonth(); // 0-11
+
+        if (!dataByYear[year]) {
+          dataByYear[year] = {};
+          RULE_COLUMNS.forEach(rule => {
+            dataByYear[year][rule] = new Array(12).fill(null);
+          });
+        }
+
+        RULE_COLUMNS.forEach(rule => {
+          const num = toNumber(row[rule]);
+          if (num != null) {
+            dataByYear[year][rule][monthIndex] = num;
+          }
+        });
+      });
+
+      availableYears = Object.keys(dataByYear)
+        .map(y => +y)
+        .sort((a, b) => a - b);
+    }
+
+    /*****************************************************
+     * 5. UI & CHART SETUP
+     *****************************************************/
+    function initUI() {
+      // populate rule selects
+      const ruleOptions = RULE_COLUMNS.map(rule => ({
+        value: rule,
+        label: rule
+      }));
+
+      fillSelect(series1RuleSelect, ruleOptions, { defaultValue: "Bank Rate" });
+      fillSelect(series2RuleSelect, ruleOptions, { defaultValue: "Taylor Rule" });
+
+      // populate year selects
+      const yearOptions = availableYears.map(y => ({
+        value: String(y),
+        label: String(y)
+      }));
+
+      const earliest = availableYears[0];
+      const latest = availableYears[availableYears.length - 1];
+
+      fillSelect(series1YearSelect, yearOptions, { defaultValue: String(earliest) });
+      fillSelect(series2YearSelect, yearOptions, { defaultValue: String(latest) });
+
+      [series1RuleSelect, series1YearSelect, series2RuleSelect, series2YearSelect]
+        .forEach(sel => sel.addEventListener("change", updateChart));
+    }
+
+    function getSeriesData(year, rule) {
+      if (!year || !rule) return new Array(12).fill(null);
+      const yearData = dataByYear[year];
+      if (!yearData || !yearData[rule]) return new Array(12).fill(null);
+      return yearData[rule];
+    }
+
+    function initChart() {
+      const ctx = document.getElementById("rateChart").getContext("2d");
+
+      const colors = [
+        "rgba(33, 150, 243, 1)",  // blue
+        "rgba(244, 67, 54, 1)"    // red
+      ];
+
+      chartInstance = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: monthLabels,
+          datasets: [
+            {
+              label: "Series 1",
+              data: [],
+              borderColor: colors[0],
+              backgroundColor: colors[0],
+              borderWidth: 2,
+              pointRadius: 3,
+              tension: 0.25
+            },
+            {
+              label: "Series 2",
+              data: [],
+              borderColor: colors[1],
+              backgroundColor: colors[1],
+              borderWidth: 2,
+              borderDash: [6, 4],
+              pointRadius: 3,
+              tension: 0.25
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: "nearest",
+            axis: "x",
+            intersect: false
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: "Month"
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: "Interest rate (%)"
+              },
+              ticks: {
+                callback: function (value) {
+                  return value + "%";
+                }
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              display: true,
+              position: "top"
+            },
+            tooltip: {
+              callbacks: {
+                label: function (ctx) {
+                  const v = ctx.parsed.y;
+                  if (v == null) {
+                    return ctx.dataset.label + ": no data";
+                  }
+                  return ctx.dataset.label + ": " + v.toFixed(2) + "%";
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function updateChart() {
+      if (!chartInstance) return;
+
+      const rule1 = series1RuleSelect.value;
+      const year1 = series1YearSelect.value;
+      const rule2 = series2RuleSelect.value;
+      const year2 = series2YearSelect.value;
+
+      const data1 = getSeriesData(year1, rule1);
+      const data2 = getSeriesData(year2, rule2);
+
+      chartInstance.data.datasets[0].label = `${rule1} (${year1})`;
+      chartInstance.data.datasets[0].data = data1;
+
+      chartInstance.data.datasets[1].label = `${rule2} (${year2})`;
+      chartInstance.data.datasets[1].data = data2;
+
+      chartInstance.update();
+    }
+
+    // Kick everything off
+    loadSheetData();
+  </script>
+</body>
+</html>
