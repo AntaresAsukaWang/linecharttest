@@ -165,6 +165,8 @@
 
     let availableYears = [];   // e.g. [2023, 2024, 2025]
     let chartInstance = null;
+    let globalMin = null;
+    let globalMax = null;
 
     const series1RuleSelect = document.getElementById("series1Rule");
     const series1YearSelect = document.getElementById("series1Year");
@@ -300,6 +302,9 @@
           const num = toNumber(row[rule]);
           if (num != null) {
             dataByYear[year][rule][monthIndex] = num;
+            // Track global min/max
+            if (globalMin === null || num < globalMin) globalMin = num;
+            if (globalMax === null || num > globalMax) globalMax = num;
           }
         });
       });
@@ -401,8 +406,8 @@
                 text: "Interest rate (%)"
               },
               beginAtZero: false,
-              min: 0,
-              max: 7,
+              min: globalMin !== null ? Math.max(0, globalMin - 1) : 0,
+              max: globalMax !== null ? globalMax + 1 : 7,
               ticks: {
                 stepSize: 0.5,
                 callback: function (value) {
