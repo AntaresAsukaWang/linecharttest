@@ -13,6 +13,10 @@
       --color-third: #bebebe;
       --color-muted: #787878;
       --color-deep: #161c4e;
+      --color-chart1: #376092;
+      --color-chart2: #82AEB1;
+      --color-chart3: #015555;
+      --color-chart4: #4099ED;
       color-scheme: light;
     }
 
@@ -124,9 +128,6 @@
       <canvas id="rateChart"></canvas>
     </div>
 
-    <p class="note">
-      Data source: Google Sheet (published as CSV). Values are percentages.
-    </p>
     <p id="errorMessage" class="error" style="display:none"></p>
   </main>
 
@@ -334,11 +335,10 @@
         label: String(y)
       }));
 
-      const earliest = availableYears[0];
-      const latest = availableYears[availableYears.length - 1];
+      const defaultYear = availableYears.includes(2024) ? "2024" : String(availableYears[availableYears.length - 1]);
 
-      fillSelect(series1YearSelect, yearOptions, { defaultValue: String(earliest) });
-      fillSelect(series2YearSelect, yearOptions, { defaultValue: String(latest) });
+      fillSelect(series1YearSelect, yearOptions, { defaultValue: defaultYear });
+      fillSelect(series2YearSelect, yearOptions, { defaultValue: defaultYear });
 
       [series1YearSelect, series2RuleSelect, series2YearSelect]
         .forEach(sel => sel.addEventListener("change", updateChart));
@@ -356,10 +356,10 @@
 
       const palette = [
         "#7e0a0d", // main (Bank Rate highlight)
-        "#161c4e",
-        "#ebc6c0",
-        "#787878",
-        "#bebebe"
+        "#376092",
+        "#82AEB1",
+        "#015555",
+        "#4099ED"
       ];
 
       chartInstance = new Chart(ctx, {
@@ -402,7 +402,7 @@
               },
               ticks: {
                 callback: function (value) {
-                  return value + "%";
+                  return parseFloat(value).toFixed(2) + "%";
                 }
               }
             }
@@ -441,7 +441,7 @@
 
       // Build comparison datasets from multi-select
       const selectedRules = Array.from(series2RuleSelect.selectedOptions).map(opt => opt.value);
-      const palette = ["#7e0a0d", "#161c4e", "#ebc6c0", "#787878", "#bebebe"];
+      const palette = ["#7e0a0d", "#376092", "#82AEB1", "#015555", "#4099ED"];
 
       const comparisonDatasets = selectedRules.map((rule, idx) => {
         const color = palette[(idx + 1) % palette.length]; // skip 0 because used for bank rate
