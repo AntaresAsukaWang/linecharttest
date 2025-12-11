@@ -540,6 +540,19 @@
 
       chartInstance.data.datasets = [chartInstance.data.datasets[0], ...comparisonDatasets];
 
+      // Calculate min and max for displayed data
+      const allValues = [
+        ...bankRateData,
+        ...comparisonDatasets.flatMap(ds => ds.data)
+      ].filter(v => v !== null && v !== undefined);
+
+      if (allValues.length > 0) {
+        const dataMin = Math.min(...allValues);
+        const dataMax = Math.max(...allValues);
+        chartInstance.options.scales.y.min = dataMin - 0.5;
+        chartInstance.options.scales.y.max = dataMax + 0.5;
+      }
+
       chartInstance.update();
     }
 
