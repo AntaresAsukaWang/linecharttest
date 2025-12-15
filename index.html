@@ -224,12 +224,12 @@
     // The rule/column names we expect in the sheet:
     const RULE_COLUMNS = [
       "Bank Rate",
-      "Original Taylor rule",
-      "Contemporaneous Taylor-type rule",
-      "Forward-looking Taylor-type rule",
-      "Forward-looking first-difference rule",
-      "Unemployment gap rule",
-      "Balanced-approach rule"
+      "Original Taylor Rule",
+      "Contemporaneous Taylor-Type Rule",
+      "Forward-Looking Taylor-Type Rule",
+      "Forward-Looking First-Difference Rule",
+      "Unemployment Gap Rule",
+      "Balanced-Approach Rule"
     ];
 
     const COMPARISON_RULES = RULE_COLUMNS.filter(r => r !== "Bank Rate");
@@ -384,7 +384,7 @@
         checkbox.type = "checkbox";
         checkbox.value = rule;
         checkbox.id = `rule-${index}`;
-        checkbox.checked = rule === "Original Taylor rule"; // default checked
+        checkbox.checked = rule === "Original Taylor Rule"; // default checked
         checkbox.addEventListener("change", updateChart);
         
         const span = document.createElement("span");
