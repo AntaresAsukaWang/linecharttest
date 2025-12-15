@@ -224,10 +224,12 @@
     // The rule/column names we expect in the sheet:
     const RULE_COLUMNS = [
       "Bank Rate",
-      "Taylor Rule",
-      "Balance Rule",
-      "First Difference Rule",
-      "Inertial Rule"
+      "Original Taylor rule",
+      "Contemporaneous Taylor-type rule",
+      "Forward-looking Taylor-type rule",
+      "Forward-looking first-difference rule",
+      "Unemployment gap rule",
+      "Balanced-approach rule"
     ];
 
     const COMPARISON_RULES = RULE_COLUMNS.filter(r => r !== "Bank Rate");
@@ -382,7 +384,7 @@
         checkbox.type = "checkbox";
         checkbox.value = rule;
         checkbox.id = `rule-${index}`;
-        checkbox.checked = rule === "Taylor Rule"; // default checked
+        checkbox.checked = rule === "Original Taylor rule"; // default checked
         checkbox.addEventListener("change", updateChart);
         
         const span = document.createElement("span");
@@ -426,7 +428,9 @@
         "#376092",
         "#82AEB1",
         "#015555",
-        "#4099ED"
+        "#4099ED",
+        "#9B59B6",
+        "#E74C3C"
       ];
 
       chartInstance = new Chart(ctx, {
@@ -520,7 +524,7 @@
 
       // Build comparison datasets from checked checkboxes
       const selectedRules = Array.from(series2RuleSelect.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-      const palette = ["#7e0a0d", "#376092", "#82AEB1", "#015555", "#4099ED"];
+      const palette = ["#7e0a0d", "#376092", "#82AEB1", "#015555", "#4099ED", "#9B59B6", "#E74C3C"];
 
       const comparisonDatasets = selectedRules.map((rule, idx) => {
         const color = palette[(idx + 1) % palette.length];
