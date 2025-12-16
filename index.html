@@ -384,7 +384,7 @@
         checkbox.type = "checkbox";
         checkbox.value = rule;
         checkbox.id = `rule-${index}`;
-        checkbox.checked = rule === "Original Taylor Rule"; // default checked
+        checkbox.checked = rule === "Original Taylor Rule" || rule === "Contemporaneous Taylor-Type Rule"; // default checked
         checkbox.addEventListener("change", updateChart);
         
         const span = document.createElement("span");
